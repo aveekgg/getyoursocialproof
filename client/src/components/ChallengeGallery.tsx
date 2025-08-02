@@ -6,6 +6,8 @@ interface ChallengeGalleryProps {
 }
 
 export default function ChallengeGallery({ challenges, onChallengeSelect }: ChallengeGalleryProps) {
+  // Debug logging for Vercel deployment
+  console.log('ChallengeGallery received challenges:', challenges?.length || 0, challenges);
   return (
     <div className="min-h-screen bg-white">
       {/* Clean Header */}
@@ -42,7 +44,17 @@ export default function ChallengeGallery({ challenges, onChallengeSelect }: Chal
           </div>
           
           <div className="space-y-6 max-w-md lg:max-w-4xl mx-auto lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
-            {challenges.map((challenge) => (
+            {challenges.length === 0 ? (
+              <div className="col-span-2 text-center py-12">
+                <div className="text-4xl mb-4">🔄</div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Loading Challenges...</h3>
+                <p className="text-gray-600">If this persists, there might be an API issue.</p>
+                <div className="mt-4 text-sm text-gray-500">
+                  Debug: Received {challenges.length} challenges
+                </div>
+              </div>
+            ) : (
+              challenges.map((challenge) => (
               <div
                 key={challenge.id}
                 className="bg-white border-2 border-gray-200 rounded-2xl p-6 cursor-pointer hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transform hover:scale-105 transition-all duration-300"
@@ -73,7 +85,8 @@ export default function ChallengeGallery({ challenges, onChallengeSelect }: Chal
                   </div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 

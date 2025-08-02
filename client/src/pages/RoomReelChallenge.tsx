@@ -22,10 +22,20 @@ export default function RoomReelChallenge() {
   const [totalPoints, setTotalPoints] = useState(0);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
 
-  const { data: challenges = [] } = useQuery<Challenge[]>({
+  const { data: challenges = [], error, isLoading, isError } = useQuery<Challenge[]>({
     queryKey: ['/api/challenges'],
     // Always fetch challenges - no login required to browse
   });
+
+  // Debug logging for Vercel deployment
+  useEffect(() => {
+    console.log('Challenges query state:', { 
+      challenges: challenges?.length || 0, 
+      isLoading, 
+      isError, 
+      error: error?.message 
+    });
+  }, [challenges, isLoading, isError, error]);
 
   const handleLogin = (userData: { username: string; email: string }) => {
     setUser(userData);
