@@ -1,7 +1,7 @@
-// JavaScript version for better Vercel compatibility
+const express = require('express');
 const { randomUUID } = require('crypto');
 
-// Inline storage implementation to avoid import issues
+// Inline storage implementation
 class MemStorage {
   constructor() {
     this.challenges = new Map();
@@ -149,36 +149,42 @@ class MemStorage {
   }
 }
 
-// Create storage instance
 const storage = new MemStorage();
 
-module.exports = async function handler(req, res) {
-  try {
-    console.log('API called:', req.method, req.url);
-    
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+const app = express();
 
-    if (req.method === 'OPTIONS') {
-      res.status(200).end();
-      return;
-    }
-
-    if (req.method === 'GET') {
-      console.log('Fetching challenges...');
-      const challenges = await storage.getChallenges();
-      console.log('Found challenges:', challenges.length);
-      res.status(200).json(challenges);
-    } else {
-      res.status(405).json({ message: 'Method not allowed' });
-    }
-  } catch (error) {
-    console.error('Error in challenges API:', error);
-    res.status(500).json({ 
-      message: 'Failed to fetch challenges',
-      error: error.message || 'Unknown error'
-    });
+// Enable CORS
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
-};
+  next();
+});
+
+app.use(express.json());
+
+// API Routes
+app.get('/api/challenges', async (req, res) => {
+  try {
+    console.log('API: Fetching challenges...');
+    const challenges = await storage.getChallenges();
+    console.log('API: Found challenges:', challenges.length);
+    res.json(challenges);
+  } catch (error) {
+    console.error('API: Error fetching challenges:', error);
+    res.status(500).json({ message: 'Failed to fetch challenges' });
+  }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Export for Vercel
+module.exports = app;
