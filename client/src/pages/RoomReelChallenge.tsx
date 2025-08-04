@@ -231,7 +231,13 @@ export default function RoomReelChallenge() {
       
       {/* Login Modal Overlay */}
       {currentScreen === 'login' && (
-        <Login onLogin={handleLogin} selectedChallenge={selectedChallenge} />
+        <Login 
+          onLogin={handleLogin} 
+          selectedChallenge={selectedChallenge ? {
+            name: selectedChallenge.name,
+            tagline: selectedChallenge.tagline || undefined
+          } : null} 
+        />
       )}
     </div>
   );

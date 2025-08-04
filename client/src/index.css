@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Real-time Video Scoring Animations */
+@keyframes score-popup {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.9);
+  }
+}
+
+.animate-score-popup {
+  animation: score-popup 2s ease-out forwards;
+}
+
 :root {
   --background: hsl(0, 0%, 100%);
   --foreground: hsl(20, 14.3%, 4.1%);

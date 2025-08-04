@@ -3,6 +3,7 @@ import { Challenge, VideoClip, ChallengePrompt } from "@shared/schema";
 import { useCamera } from "@/hooks/useCamera";
 import { useMediaRecorder } from "@/hooks/useMediaRecorder";
 import SketchOverlay from "./SketchOverlay";
+import AIOverlay from "./AIOverlay";
 
 interface CameraInterfaceProps {
   challenge: Challenge;
@@ -151,6 +152,19 @@ export default function CameraInterface({
         ))}
       </div>
 
+      {/* Sketch Overlay */}
+      <SketchOverlay 
+        isActive={recordingState === 'recording'}
+        intensity={0.7}
+      />
+
+      {/* AI Detection Overlay */}
+      <AIOverlay 
+        videoElement={videoRef.current}
+        isRecording={isRecording}
+        challengeId={challenge.id}
+      />
+      
       {/* Clean interface - no obstructive overlays */}
       
       {/* Top Overlay - Clean and Minimal */}
