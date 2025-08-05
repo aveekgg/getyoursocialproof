@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Challenge, VideoClip, ChallengePrompt } from "@shared/schema";
 import { useCamera } from "@/hooks/useCamera";
 import { useMediaRecorder, RecordingState as MediaRecorderState } from "@/hooks/useMediaRecorder";
 import SketchOverlay from "./SketchOverlay";
+import { useSwipeable } from 'react-swipeable';
 
 interface CameraInterfaceProps {
   challenge: Challenge;
@@ -25,9 +26,39 @@ export default function CameraInterface({
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [reactions, setReactions] = useState<{ id: number; emoji: string }[]>([]);
+  const [cameraInitialized, setCameraInitialized] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const promptContainerRef = useRef<HTMLDivElement>(null);
   
-  const { stream, error: cameraError } = useCamera();
+  // Initialize camera only when needed (pass false to prevent auto-initialization)
+  const { stream, error: cameraError, initialize: initializeCamera } = useCamera(false);
+  
+  // Gen Z nudges for the recording screen
+  const genZNudges = [
+    "🔥 You're killing it!",
+    "✨ That's the content we love!",
+    "💯 Nailed it!",
+    "🌟 Future influencer alert!",
+    "🎯 Perfect shot!"
+  ];
+  
+  // Swipe handlers for prompt carousel
+  const handleSwipe = useCallback((direction: 'left' | 'right') => {
+    setCurrentPromptIndex(prev => {
+      if (direction === 'left') {
+        return Math.min(prev + 1, selectedPrompts.length - 1);
+      } else {
+        return Math.max(prev - 1, 0);
+      }
+    });
+  }, [selectedPrompts.length]);
+  
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => handleSwipe('left'),
+    onSwipedRight: () => handleSwipe('right'),
+    preventScrollOnSwipe: true,
+    trackMouse: true
+  });
   const {
     startRecording,
     stopRecording,
@@ -48,6 +79,19 @@ export default function CameraInterface({
     setCurrentPromptIndex(prev => Math.max(prev - 1, 0));
   };
 
+  // Initialize camera when needed
+  const initializeCameraStream = useCallback(async () => {
+    if (!cameraInitialized) {
+      try {
+        await initializeCamera();
+        setCameraInitialized(true);
+      } catch (err) {
+        console.error('Failed to initialize camera:', err);
+        // Show error to user if needed
+      }
+    }
+  }, [cameraInitialized, initializeCamera]);
+  
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
@@ -99,9 +143,20 @@ export default function CameraInterface({
     }
   }, [recordingState]);
 
-  const handleStartRecording = () => {
+  const handleStartRecording = async () => {
     if (recordingState === 'idle') {
+      // Initialize camera first if not already done
+      if (!cameraInitialized) {
+        await initializeCameraStream();
+      }
       setRecordingState('countdown');
+      
+      // Show a random Gen Z nudge
+      const randomNudge = genZNudges[Math.floor(Math.random() * genZNudges.length)];
+      setReactions(prev => [...prev, { 
+        id: Date.now(), 
+        emoji: randomNudge.split(' ')[0] // Get just the emoji
+      }]);
     }
   };
 
@@ -178,14 +233,30 @@ export default function CameraInterface({
 
   return (
     <div className="min-h-screen bg-dark relative">
-      {/* Camera Feed */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover"
-      />
+      {/* Camera Feed - Only show if camera is initialized */}
+      {cameraInitialized ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+          <div className="text-center text-white">
+            <div className="text-5xl mb-4">📱</div>
+            <h2 className="text-xl font-bold mb-2">Ready to Start?</h2>
+            <p className="text-gray-300 mb-6">Click 'Start Recording' to begin your challenge</p>
+            <button
+              onClick={handleStartRecording}
+              className="bg-red-500 hover:bg-red-600 text-white py-3 px-8 rounded-full font-bold text-lg shadow-lg transform hover:scale-105 transition-all"
+            >
+              🎬 Start Recording
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Camera grid overlay */}
       <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-20 pointer-events-none">
