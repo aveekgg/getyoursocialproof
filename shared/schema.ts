@@ -110,5 +110,4 @@ export type Submission = typeof submissions.$inferSelect;
 export type InsertReward = z.infer<typeof insertRewardSchema>;
 export type Reward = typeof rewards.$inferSelect;
 
-// Export the new types
-export type { ChallengePrompt, ChallengeTemplate };
+// All types are already exported above

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Challenge, type InsertChallenge, type Submission, type InsertSubmission, type Reward, type InsertReward, type ChallengeStep, type ChallengePrompt } from "@shared/schema";
+import { type User, type InsertUser, type Challenge, type InsertChallenge, type Submission, type InsertSubmission, type Reward, type InsertReward, type ChallengeStep, type ChallengePrompt } from "../shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {

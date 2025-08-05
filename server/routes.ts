@@ -66,7 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/submissions", async (req, res) => {
     try {
       const validatedData = insertSubmissionSchema.parse(req.body);
-      const submission = await storage.createSubmission(validatedData);
+      const created = await storage.createSubmission(validatedData);
       
       // Generate random reward with weighted distribution - Updated to match changes.md
       const rewards = [
