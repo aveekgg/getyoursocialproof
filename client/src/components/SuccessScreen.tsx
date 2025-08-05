@@ -1,4 +1,12 @@
+interface Reward {
+  emoji: string;
+  text: string;
+  color: string;
+  value: string;
+}
+
 interface SuccessScreenProps {
+  reward: Reward | null;
   totalPoints: number;
   clipsCount: number;
   totalDuration: number;
@@ -7,6 +15,7 @@ interface SuccessScreenProps {
 }
 
 export default function SuccessScreen({ 
+  reward,
   totalPoints, 
   clipsCount, 
   totalDuration, 
@@ -26,8 +35,13 @@ export default function SuccessScreen({
           <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 mx-auto shadow-2xl">
             <span className="text-4xl">🏆</span>
           </div>
-          <h1 className="text-4xl font-bold mb-4">🚀 You're Live!</h1>
-          <p className="text-lg opacity-90 mb-8 max-w-sm">Your reel's uploaded — your story can help someone book with confidence.</p>
+          <h1 className="text-4xl font-bold mb-4">🚀 Success!</h1>
+          <p className="text-lg opacity-90 mb-4 max-w-sm">Your reel is live and you've earned a reward!</p>
+          {reward && (
+            <div className="bg-yellow-400 text-black rounded-xl px-4 py-2 inline-block font-bold">
+              You won: {reward.value}
+            </div>
+          )}
         </div>
         
         {/* Final Stats */}
@@ -46,7 +60,7 @@ export default function SuccessScreen({
               <div className="text-sm opacity-90">Total Duration</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">1</div>
+              <div className="text-2xl font-bold">{reward?.emoji || '🎁'}</div>
               <div className="text-sm opacity-90">Reward Won</div>
             </div>
           </div>

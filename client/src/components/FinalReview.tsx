@@ -10,9 +10,10 @@ interface FinalReviewProps {
   completedClips: VideoClip[];
   totalPoints: number;
   onSubmit: (submissionId: string) => void;
+  onBack: () => void;
 }
 
-export default function FinalReview({ challenge, selectedPrompts, completedClips, totalPoints, onSubmit }: FinalReviewProps) {
+export default function FinalReview({ challenge, selectedPrompts, completedClips, totalPoints, onSubmit, onBack }: FinalReviewProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const { toast } = useToast();
   
@@ -51,9 +52,15 @@ export default function FinalReview({ challenge, selectedPrompts, completedClips
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">🎞️ Your Reel Is Ready!</h2>
-        <p className="opacity-90">Looks good! Ready to share your RoomReel and win a reward?</p>
+      <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white relative">
+        <button 
+          onClick={onBack}
+          className="absolute top-6 left-4 w-10 h-10 bg-black/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white text-xl"
+        >
+          &lt;
+        </button>
+        <h2 className="text-2xl font-bold mb-2 text-center">🎞️ Your Reel Is Ready!</h2>
+        <p className="opacity-90 text-center">Looks good! Ready to share your RoomReel and win a reward?</p>
       </div>
       
       <div className="p-6">

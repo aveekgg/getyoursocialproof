@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 
+export type RecordingState = 'idle' | 'recording' | 'paused';
+
 export function useMediaRecorder(stream: MediaStream | null) {
-  const [isRecording, setIsRecording] = useState(false);
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -23,7 +25,7 @@ export function useMediaRecorder(stream: MediaStream | null) {
       };
 
       mediaRecorder.start(1000); // Collect data every second
-      setIsRecording(true);
+      setRecordingState('recording');
     } catch (error) {
       console.error('Failed to start recording:', error);
       // Fallback to basic MediaRecorder
@@ -39,33 +41,51 @@ export function useMediaRecorder(stream: MediaStream | null) {
         };
 
         mediaRecorder.start(1000);
-        setIsRecording(true);
+        setRecordingState('recording');
       } catch (fallbackError) {
         console.error('MediaRecorder not supported:', fallbackError);
       }
     }
   }, [stream]);
 
+  const pauseRecording = useCallback(() => {
+    if (mediaRecorderRef.current && recordingState === 'recording') {
+      mediaRecorderRef.current.pause();
+      setRecordingState('paused');
+    }
+  }, [recordingState]);
+
+  const resumeRecording = useCallback(() => {
+    if (mediaRecorderRef.current && recordingState === 'paused') {
+      mediaRecorderRef.current.resume();
+      setRecordingState('recording');
+    }
+  }, [recordingState]);
+
   const stopRecording = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
-      if (!mediaRecorderRef.current || !isRecording) {
+      if (!mediaRecorderRef.current || recordingState === 'idle') {
         resolve(null);
         return;
       }
 
       mediaRecorderRef.current.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        setIsRecording(false);
+        setRecordingState('idle');
         resolve(blob);
       };
 
       mediaRecorderRef.current.stop();
     });
-  }, [isRecording]);
+  }, [recordingState]);
 
   return {
-    isRecording,
+    recordingState,
+    isRecording: recordingState === 'recording',
+    isPaused: recordingState === 'paused',
     startRecording,
-    stopRecording
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
   };
 }

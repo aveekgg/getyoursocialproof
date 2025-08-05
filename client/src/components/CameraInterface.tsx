@@ -1,18 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { Challenge, VideoClip, ChallengePrompt } from "@shared/schema";
 import { useCamera } from "@/hooks/useCamera";
-import { useMediaRecorder } from "@/hooks/useMediaRecorder";
+import { useMediaRecorder, RecordingState as MediaRecorderState } from "@/hooks/useMediaRecorder";
 import SketchOverlay from "./SketchOverlay";
-import AIOverlay from "./AIOverlay";
 
 interface CameraInterfaceProps {
   challenge: Challenge;
   selectedPrompts: ChallengePrompt[];
-  onVideoComplete: (clip: VideoClip) => void;
+  onVideoComplete: (clip: VideoClip & { thumbnailUrl?: string }) => void;
   onBack: () => void;
 }
 
-type RecordingState = 'idle' | 'countdown' | 'recording';
+type RecordingState = 'idle' | 'countdown' | 'recording' | 'paused';
 
 export default function CameraInterface({ 
   challenge, 
@@ -24,13 +23,30 @@ export default function CameraInterface({
   const [countdown, setCountdown] = useState(3);
   const [recordingTime, setRecordingTime] = useState(0);
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<{ id: number; emoji: string }[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const { stream, error: cameraError } = useCamera();
-  const { startRecording, stopRecording, isRecording } = useMediaRecorder(stream);
+  const {
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    isRecording,
+    isPaused,
+  } = useMediaRecorder(stream);
   
   const totalDuration = selectedPrompts.reduce((sum, prompt) => sum + prompt.duration, 0);
   const currentPrompt = selectedPrompts[currentPromptIndex] || selectedPrompts[0];
+
+  const handleNextPrompt = () => {
+    setCurrentPromptIndex(prev => Math.min(prev + 1, selectedPrompts.length - 1));
+  };
+
+  const handlePrevPrompt = () => {
+    setCurrentPromptIndex(prev => Math.max(prev - 1, 0));
+  };
 
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -56,20 +72,10 @@ export default function CameraInterface({
   }, [recordingState, startRecording]);
 
   useEffect(() => {
-    if (recordingState === 'recording') {
+    if (recordingState === 'recording' && !isPaused) {
       const timer = setInterval(() => {
         setRecordingTime(prev => {
           const newTime = prev + 1;
-          
-          // Auto-advance to next prompt based on duration
-          let cumulativeTime = 0;
-          for (let i = 0; i < selectedPrompts.length; i++) {
-            cumulativeTime += selectedPrompts[i].duration;
-            if (newTime <= cumulativeTime && currentPromptIndex !== i) {
-              setCurrentPromptIndex(i);
-              break;
-            }
-          }
           
           // Stop recording when total duration is reached
           if (newTime >= totalDuration) {
@@ -84,7 +90,7 @@ export default function CameraInterface({
     } else {
       setRecordingTime(0);
     }
-  }, [recordingState, totalDuration, selectedPrompts, currentPromptIndex]);
+  }, [recordingState, totalDuration]);
 
   // Reset prompt index when starting new recording
   useEffect(() => {
@@ -99,18 +105,54 @@ export default function CameraInterface({
     }
   };
 
+  const handlePauseRecording = () => {
+    pauseRecording();
+    setRecordingState('paused');
+  };
+
+  const handleResumeRecording = () => {
+    resumeRecording();
+    setRecordingState('recording');
+  };
+
+  const handleCaptureThumbnail = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const url = canvas.toDataURL('image/jpeg');
+        setThumbnailUrl(url);
+        // Optional: Show a brief confirmation
+      }
+    }
+  };
+
+  const handleTriggerReaction = () => {
+    const genZNudges = ['🔥', '✨', '🙌', '💯', '💅', ' slay'];
+    const emoji = genZNudges[Math.floor(Math.random() * genZNudges.length)];
+    setReactions(prev => [...prev, { id: Date.now(), emoji }]);
+    setTimeout(() => {
+      setReactions(prev => prev.slice(1));
+    }, 2000);
+  };
+
   const handleStopRecording = async () => {
     const blob = await stopRecording();
     if (blob) {
-      const clip: VideoClip = {
+      const clip: VideoClip & { thumbnailUrl?: string } = {
         stepId: 1, // Single video for entire challenge
         duration: recordingTime,
         size: blob.size,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        thumbnailUrl: thumbnailUrl ?? undefined,
       };
       onVideoComplete(clip);
     }
     setRecordingState('idle');
+    setThumbnailUrl(null);
   };
 
   // Removed handleLockShot - no longer needed
@@ -152,18 +194,29 @@ export default function CameraInterface({
         ))}
       </div>
 
+      {/* Gen Z Nudges */}
+      <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden">
+        {reactions.map(reaction => (
+          <div 
+            key={reaction.id} 
+            className="absolute text-4xl animate-float-up"
+            style={{
+              left: `${Math.random() * 80 + 10}%`,
+              bottom: '10%',
+            }}
+          >
+            {reaction.emoji}
+          </div>
+        ))}
+      </div>
+
       {/* Sketch Overlay */}
       <SketchOverlay 
         isActive={recordingState === 'recording'}
         intensity={0.7}
       />
 
-      {/* AI Detection Overlay */}
-      <AIOverlay 
-        videoElement={videoRef.current}
-        isRecording={isRecording}
-        challengeId={challenge.id}
-      />
+
       
       {/* Clean interface - no obstructive overlays */}
       
@@ -178,8 +231,10 @@ export default function CameraInterface({
             <span className="text-lg">×</span>
           </button>
           <div className="flex items-center space-x-2 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
-            <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`}></div>
-            <span className="text-white text-xs font-medium">{isRecording ? 'REC' : 'READY'}</span>
+            <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : (isPaused ? 'bg-yellow-500' : 'bg-gray-400')}`}></div>
+            <span className="text-white text-xs font-medium">
+              {isRecording ? 'REC' : (isPaused ? 'PAUSED' : 'READY')}
+            </span>
           </div>
           <div className="text-white text-xs bg-black/30 backdrop-blur-sm rounded-full px-3 py-1">
             {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
@@ -191,53 +246,29 @@ export default function CameraInterface({
       
       {/* Removed obstructive center overlay */}
       
-      {/* Enhanced Prompts Section - Bigger and More Prominent */}
-      {recordingState === 'idle' && (
-        <div className="absolute top-20 left-0 right-0 bottom-32 z-20 px-4 flex items-center">
-          <div className="w-full bg-black/60 backdrop-blur-lg rounded-3xl p-6 max-h-96 overflow-y-auto scrollbar-hide border border-white/20">
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 mx-auto">
-                <span className="text-2xl">📋</span>
-              </div>
-              <h3 className="text-white font-bold text-xl mb-2">Your Recording Guide</h3>
-              <p className="text-white/80 text-sm">We'll guide you through these prompts during recording</p>
+      {/* In-Recording Prompt Bubble - Moved to bottom center */}
+      {(isRecording || isPaused) && currentPrompt && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-30 w-full max-w-sm px-4">
+          <div className="bg-black/70 backdrop-blur-lg rounded-2xl p-4 text-white text-center flex items-center justify-between shadow-2xl">
+            <button 
+              onClick={handlePrevPrompt} 
+              disabled={currentPromptIndex === 0}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-50 flex items-center justify-center transition-all"
+            >
+              &lt;
+            </button>
+            <div className="flex-1 mx-3">
+              <div className="text-3xl mb-1">{currentPrompt.emoji}</div>
+              <div className="text-sm font-semibold leading-tight">{currentPrompt.text}</div>
+              <div className="text-xs text-white/70 mt-1">{currentPromptIndex + 1} of {selectedPrompts.length}</div>
             </div>
-            
-            <div className="space-y-4">
-              {selectedPrompts.map((prompt, index) => (
-                <div 
-                  key={prompt.id}
-                  className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20"
-                >
-                  <div className="flex items-start space-x-4">
-                    <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className="text-2xl">{prompt.emoji}</span>
-                        <span className="text-white font-semibold text-base">{prompt.text}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-white/60 text-sm">Duration: {prompt.duration} seconds</span>
-                        <span className="text-primary font-semibold text-sm">+{challenge.pointsPerStep} pts</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 text-center">
-              <div className="bg-white/10 rounded-2xl p-4">
-                <div className="text-white font-semibold text-lg">
-                  Total Recording Time: {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toString().padStart(2, '0')}
-                </div>
-                <div className="text-white/80 text-sm mt-1">
-                  Total Points: ⭐ {challenge.pointsPerStep * selectedPrompts.length}
-                </div>
-              </div>
-            </div>
+            <button 
+              onClick={handleNextPrompt} 
+              disabled={currentPromptIndex === selectedPrompts.length - 1}
+              className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-50 flex items-center justify-center transition-all"
+            >
+              &gt;
+            </button>
           </div>
         </div>
       )}
@@ -255,14 +286,33 @@ export default function CameraInterface({
             </button>
           )}
           
-          {recordingState === 'recording' && (
+          {recordingState === 'recording' && !isPaused && (
             <button 
-              onClick={handleStopRecording}
-              data-testid="button-stop-recording"
-              className="bg-red-600 hover:bg-red-700 text-white py-4 px-8 rounded-full font-bold text-lg shadow-lg animate-pulse border-3 border-red-600"
+              onClick={handlePauseRecording}
+              data-testid="button-pause-recording"
+              className="bg-yellow-500 hover:bg-yellow-600 text-white py-4 px-8 rounded-full font-bold text-lg shadow-lg"
             >
-              ⏹️ Stop Recording
+              ⏸️ Pause
             </button>
+          )}
+
+          {isPaused && (
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={handleResumeRecording}
+                data-testid="button-resume-recording"
+                className="bg-green-500 hover:bg-green-600 text-white py-4 px-8 rounded-full font-bold text-lg shadow-lg"
+              >
+                ▶️ Resume
+              </button>
+              <button 
+                onClick={handleStopRecording}
+                data-testid="button-finish-recording"
+                className="bg-red-600 hover:bg-red-700 text-white py-4 px-8 rounded-full font-bold text-lg shadow-lg"
+              >
+                ⏹️ Finish
+              </button>
+            </div>
           )}
           
           {recordingState === 'countdown' && (

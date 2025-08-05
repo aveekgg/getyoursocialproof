@@ -6,21 +6,54 @@ import RecordingComplete from "@/components/RecordingComplete";
 import FinalReview from "@/components/FinalReview";
 import RewardWheel from "@/components/RewardWheel";
 import SuccessScreen from "@/components/SuccessScreen";
-import Login from "@/components/Login";
-import Navbar from "@/components/Navbar";
+import DetailsForm from "@/components/DetailsForm";
 import type { Challenge, VideoClip, ChallengePrompt } from "@shared/schema";
 
-type Screen = 'login' | 'gallery' | 'camera' | 'complete' | 'review' | 'reward' | 'success';
+interface Reward {
+  emoji: string;
+  text: string;
+  color: string;
+  value: string;
+}
+
+type Screen = 'gallery' | 'camera' | 'complete' | 'review' | 'reward' | 'success' | 'details';
 
 export default function RoomReelChallenge() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('gallery');
-  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+  const [screenHistory, setScreenHistory] = useState<Screen[]>(['gallery']);
+
+  const navigateTo = (screen: Screen) => {
+    setScreenHistory(prev => [...prev, screen]);
+  };
+
+  const handleBack = () => {
+    if (screenHistory.length > 1) {
+      setScreenHistory(prev => prev.slice(0, -1));
+    }
+  };
+
+  useEffect(() => {
+    setCurrentScreen(screenHistory[screenHistory.length - 1]);
+  }, [screenHistory]);
+
+  // Handle browser back button
+  useEffect(() => {
+    const handlePopState = () => {
+      handleBack();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [screenHistory]); // Re-add listener if history logic changes
+
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [selectedPrompts, setSelectedPrompts] = useState<ChallengePrompt[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedClips, setCompletedClips] = useState<VideoClip[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [wonReward, setWonReward] = useState<Reward | null>(null);
 
   const { data: challenges = [], error, isLoading, isError } = useQuery<Challenge[]>({
     queryKey: ['/api/challenges'],
@@ -37,27 +70,14 @@ export default function RoomReelChallenge() {
     });
   }, [challenges, isLoading, isError, error]);
 
-  const handleLogin = (userData: { username: string; email: string }) => {
-    setUser(userData);
-    // After login, go to camera if a challenge was selected, otherwise go to gallery
-    if (selectedChallenge) {
-      setCurrentScreen('camera');
-    } else {
-      setCurrentScreen('gallery');
-    }
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    setCurrentScreen('gallery'); // Always go back to home page
-    // Reset all state
-    setSelectedChallenge(null);
-    setSelectedPrompts([]);
-    setCurrentStep(0);
-    setCompletedClips([]);
-    setTotalPoints(0);
-    setSubmissionId(null);
-  };
+  const rewards: Reward[] = [
+    { emoji: '☕', text: 'Starbucks', color: '#FF6B6B', value: 'Starbucks ☕' },
+    { emoji: '💪', text: 'Gym Trial', color: '#4ECDC4', value: 'Gym Trial 💪' },
+    { emoji: '🎧', text: 'Spotify', color: '#45B7D1', value: 'Spotify 1-Month 🎧' },
+    { emoji: '🌟', text: 'IG Feature', color: '#96CEB4', value: 'Feature Me on IG 🌟' },
+    { emoji: '🛒', text: 'Grocery', color: '#FFEAA7', value: 'Grocery Voucher 🛒' },
+    { emoji: '🏰', text: 'Surprise', color: '#DDA0DD', value: 'Surprise 🏰' }
+  ];
 
   const handleChallengeSelect = (challengeId: string) => {
     const challenge = challenges.find(c => c.id === challengeId);
@@ -73,53 +93,59 @@ export default function RoomReelChallenge() {
       ];
       setSelectedPrompts(challenge.promptPool && challenge.promptPool.length > 0 ? challenge.promptPool : fallbackPrompts);
       
-      // Check if user is logged in before starting challenge
-      if (!user) {
-        setCurrentScreen('login');
-      } else {
-        setCurrentScreen('camera');
-      }
+      navigateTo('camera');
     }
   };
 
   const handleStartChallenge = () => {
     setCurrentStep(0);
-    setCurrentScreen('camera');
+    navigateTo('camera');
   };
 
-  const handleClipComplete = (clip: VideoClip) => {
-    setCompletedClips([clip]); // Single video for entire challenge
+  const handleClipComplete = (clip: VideoClip & { thumbnailUrl?: string }) => {
+    setCompletedClips(prev => [...prev, clip]);
     setTotalPoints((selectedChallenge?.pointsPerStep || 25) * selectedPrompts.length);
-    setCurrentScreen('review'); // Skip the complete screen, go straight to review
+    navigateTo('review');
   };
 
   const handleSubmitVideo = async (submissionId: string) => {
     setSubmissionId(submissionId);
-    setCurrentScreen('reward');
+    navigateTo('reward');
+  };
+
+  const handleSpinComplete = (reward: Reward) => {
+    setWonReward(reward);
+    navigateTo('details');
   };
 
   const handleFinishChallenge = () => {
-    setCurrentScreen('success');
+    navigateTo('details'); // Go to details form instead of success
+  };
+
+  const handleDetailsSubmit = (details: { email: string; instagram?: string }) => {
+    console.log('User Details:', details); // You can send this to your backend
+    navigateTo('success');
   };
 
   const handleContinueRecording = () => {
     if (currentStep < selectedPrompts.length - 1) {
       setCurrentStep(currentStep + 1);
-      setCurrentScreen('camera');
+      navigateTo('camera');
     } else {
-      setCurrentScreen('review');
+      navigateTo('review');
     }
   };
 
   const handleStartNewChallenge = () => {
     // Reset all state
-    setCurrentScreen('gallery');
+    setScreenHistory(['gallery']);
     setSelectedChallenge(null);
     setSelectedPrompts([]);
     setCurrentStep(0);
     setCompletedClips([]);
     setTotalPoints(0);
     setSubmissionId(null);
+    setWonReward(null);
   };
 
   // Allow scrolling except on camera screen
@@ -134,16 +160,10 @@ export default function RoomReelChallenge() {
     };
   }, [currentScreen]);
 
-  const commonProps = {
-    onBack: () => {
-      if (currentScreen === 'camera') setCurrentScreen('gallery');
-    }
-  };
+  const commonProps = { onBack: handleBack };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Only show navbar when user is logged in */}
-      {user && <Navbar user={user} onLogout={handleLogout} />}
       
       <div className="min-h-screen">
         {(() => {
@@ -190,20 +210,23 @@ export default function RoomReelChallenge() {
           completedClips={completedClips}
           totalPoints={totalPoints}
           onSubmit={handleSubmitVideo}
+          {...commonProps}
         />
       );
     
     case 'reward':
       return (
         <RewardWheel
-          submissionId={submissionId!}
-          onFinish={handleFinishChallenge}
+          rewards={rewards}
+          onSpinComplete={handleSpinComplete}
+          {...commonProps}
         />
       );
     
     case 'success':
       return (
         <SuccessScreen
+          reward={wonReward}
           totalPoints={totalPoints}
           clipsCount={completedClips.length}
           totalDuration={completedClips.reduce((sum, clip) => sum + clip.duration, 0)}
@@ -222,23 +245,17 @@ export default function RoomReelChallenge() {
           }}
         />
       );
+
+    case 'details':
+      return (
+        <DetailsForm onSubmit={handleDetailsSubmit} {...commonProps} />
+      );
     
             default:
               return <ChallengeGallery challenges={challenges} onChallengeSelect={handleChallengeSelect} />;
           }
         })()}
       </div>
-      
-      {/* Login Modal Overlay */}
-      {currentScreen === 'login' && (
-        <Login 
-          onLogin={handleLogin} 
-          selectedChallenge={selectedChallenge ? {
-            name: selectedChallenge.name,
-            tagline: selectedChallenge.tagline || undefined
-          } : null} 
-        />
-      )}
     </div>
   );
 }
