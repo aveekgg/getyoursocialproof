@@ -230,17 +230,55 @@ export class MemStorage implements IStorage {
     const reward: Reward = { 
       ...insertReward, 
       id, 
-      createdAt: new Date() 
+      createdAt: new Date(),
+      claimed: 0 // Initialize as not claimed
     } as Reward;
     this.rewards.set(id, reward);
     return reward;
   }
 
-  async getRewardBySubmission(submissionId: string): Promise<Reward | undefined> {
-    return Array.from(this.rewards.values()).find(
-      (reward) => reward.submissionId === submissionId,
-    );
-  }
+async getRewardBySubmission(submissionId: string): Promise<Reward | undefined> {
+return Promise.resolve(
+Array.from(this.rewards.values()).find((r) => r.submissionId === submissionId)
+);
+}
+
+async getUserRewards(userId: string): Promise<Reward[]> {
+// Get all submissions for the user
+const userSubmissions = Array.from(this.submissions.values()).filter(
+(s) => s.userId === userId
+);
+
+// Get all rewards for these submissions
+const userRewards = [];
+for (const submission of userSubmissions) {
+const reward = await this.getRewardBySubmission(submission.id);
+if (reward) {
+userRewards.push(reward);
+}
+}
+
+return userRewards;
+}
+
+async claimReward(userId: string, rewardId: string): Promise<Reward> {
+const reward = this.rewards.get(rewardId);
+if (!reward) {
+throw new Error('Reward not found');
+}
+
+// Check if the reward belongs to the user's submission
+const submission = this.submissions.get(reward.submissionId);
+if (!submission || submission.userId !== userId) {
+throw new Error('Unauthorized to claim this reward');
+}
+
+// Mark as claimed (in a real app, you might want to track the claim date, etc.)
+const updatedReward = { ...reward, claimed: 1 };
+this.rewards.set(rewardId, updatedReward);
+
+return updatedReward;
+}
 }
 
 export const storage = new MemStorage();

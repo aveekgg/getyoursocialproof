@@ -1,24 +1,39 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertSubmissionSchema, insertRewardSchema } from "@shared/schema";
+import { storage } from "./storage.js";
+import { insertSubmissionSchema, insertRewardSchema } from "@shared/schema.js";
 import { z } from "zod";
+
+// Type for error handling middleware
+type ErrorWithStatus = Error & {
+  status?: number;
+  statusCode?: number;
+  message: string;
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get all challenges
-  app.get("/api/challenges", async (_req, res) => {
+  app.get("/api/challenges", async (_req: Request, res: Response) => {
     try {
       const challenges = await storage.getChallenges();
       res.json(challenges);
     } catch (error) {
+      console.error('Error fetching challenges:', error);
       res.status(500).json({ message: "Failed to fetch challenges" });
     }
   });
 
+  // Type for reward preview
+  type RewardPreview = {
+    icon: string;
+    name: string;
+    rarity: 'common' | 'rare' | 'epic';
+  };
+
   // Get rewards preview for homepage
-  app.get("/api/rewards/preview", async (_req, res) => {
+  app.get("/api/rewards/preview", async (_req: Request, res: Response<RewardPreview[] | { message: string }>) => {
     try {
-      const rewardPreviews = [
+      const rewardPreviews: RewardPreview[] = [
         { icon: "☕", name: "Costa Cards", rarity: "common" },
         { icon: "🎵", name: "Spotify Premium", rarity: "rare" },
         { icon: "🍕", name: "Food Vouchers", rarity: "common" },
@@ -28,12 +43,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
       res.json(rewardPreviews);
     } catch (error) {
+      console.error('Error fetching reward previews:', error);
       res.status(500).json({ message: "Failed to fetch reward previews" });
     }
   });
 
   // Get specific challenge
-  app.get("/api/challenges/:id", async (req, res) => {
+  app.get("/api/challenges/:id", async (req: Request<{ id: string }>, res: Response) => {
     try {
       const challenge = await storage.getChallenge(req.params.id);
       if (!challenge) {
@@ -41,6 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(challenge);
     } catch (error) {
+      console.error(`Error fetching challenge ${req.params.id}:`, error);
       res.status(500).json({ message: "Failed to fetch challenge" });
     }
   });
@@ -60,41 +77,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { type: "grocery", value: "Grocery Voucher 🛒", weight: 15 },
         { type: "social", value: "Feature Me on IG 🌟", weight: 5 },
         
-        // Surprise rewards (30% chance)
-        { type: "surprise", value: "Surprise 🏰", weight: 30 }
       ];
       
-      // Weighted random selection
-      const totalWeight = rewards.reduce((sum, reward) => sum + reward.weight, 0);
-      let random = Math.random() * totalWeight;
       let selectedReward = rewards[0];
+      const random = Math.random();
+      let cumulativeWeight = 0;
       
       for (const reward of rewards) {
-        random -= reward.weight;
-        if (random <= 0) {
+        cumulativeWeight += reward.weight;
+        if (random <= cumulativeWeight) {
           selectedReward = reward;
           break;
         }
       }
       
       const reward = await storage.createReward({
-        submissionId: submission.id,
+        submissionId: created.id,
         rewardType: selectedReward.type,
         rewardValue: selectedReward.value,
         claimed: 0
       });
       
-      res.json({ submission, reward });
+      res.status(201).json({ submission: created, reward });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid submission data", errors: error.errors });
+        console.error('Validation error in submission:', error.errors);
+        res.status(400).json({ 
+          message: "Invalid submission data", 
+          errors: error.errors 
+        });
+      } else {
+        console.error('Error submitting challenge:', error);
+        res.status(500).json({ 
+          message: "Failed to submit challenge" 
+        });
       }
-      res.status(500).json({ message: "Failed to create submission" });
+    }
+  });
+
+  // Get user's rewards
+  app.get("/api/rewards", async (req: Request<{}, {}, {}, { userId?: string }>, res: Response) => {
+    try {
+      const { userId } = req.query;
+      if (!userId || typeof userId !== 'string') {
+        return res.status(400).json({ 
+          message: "User ID is required" 
+        });
+      }
+      const rewards = await storage.getUserRewards(userId);
+      res.json(rewards);
+    } catch (error) {
+      console.error('Error fetching user rewards:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch rewards" 
+      });
+    }
+  });
+
+  // Type for claim reward request
+  type ClaimRewardRequest = {
+    userId: string;
+    rewardId: string;
+  };
+
+  // Claim a reward
+  app.post("/api/rewards/claim", async (req: Request<{}, {}, ClaimRewardRequest>, res: Response) => {
+    try {
+      const { userId, rewardId } = req.body;
+      if (!userId || !rewardId) {
+        return res.status(400).json({ 
+          message: "User ID and Reward ID are required" 
+        });
+      }
+      const reward = await storage.claimReward(userId, rewardId);
+      res.status(201).json(reward);
+    } catch (error) {
+      console.error('Error claiming reward:', error);
+      if (error instanceof Error && error.message.includes('not enough points')) {
+        return res.status(400).json({ 
+          message: error.message 
+        });
+      }
+      res.status(500).json({ 
+        message: "Failed to claim reward" 
+      });
     }
   });
 
   // Get submission details
-  app.get("/api/submissions/:id", async (req, res) => {
+  app.get("/api/submissions/:id", async (req: Request<{ id: string }>, res: Response) => {
     try {
       const submission = await storage.getSubmission(req.params.id);
       if (!submission) {

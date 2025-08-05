@@ -1,6 +1,12 @@
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import express, { type Request, type Response, type NextFunction } from "express";
+import { registerRoutes } from "./routes.js";
+import { setupVite, serveStatic, log } from "./vite.js";
+
+type ErrorWithStatus = Error & { 
+  status?: number; 
+  statusCode?: number;
+  message: string;
+};
 
 const app = express();
 app.use(express.json());
@@ -39,9 +45,19 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Error handling middleware with proper type annotations
+  app.use((err: ErrorWithStatus, req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = err.message || 'Internal Server Error';
+    
+    // Log the error for debugging
+    console.error(`[${new Date().toISOString()}] Error:`, { 
+      message: err.message, 
+      stack: err.stack,
+      status: status,
+      path: req.path,
+      method: req.method 
+    });
 
     res.status(status).json({ message });
     throw err;
